@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JESA // Vision HUD</title>
+<style>
+:root{--amber:#ff9b38;--amber2:#ffd19a;--dim:#a85b21;--bg:#050606;--panel:rgba(8,10,10,.76);--line:rgba(255,155,56,.58)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--amber2);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow:hidden}
+#app{position:relative;width:100%;height:100%;background:radial-gradient(ellipse at center,#21160d 0%,#080909 56%,#020303 100%)}
+#video{position:absolute;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:.74;filter:contrast(1.08) saturate(.75)}
+#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.scanlines{position:absolute;inset:0;pointer-events:none;opacity:.13;background:repeating-linear-gradient(0deg,transparent 0px,transparent 3px,#ff9b38 4px)}
+.vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse,transparent 38%,rgba(0,0,0,.78) 100%)}
+.topbar{position:absolute;top:20px;left:24px;right:24px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.brand{font-size:clamp(16px,2vw,25px);letter-spacing:.2em;font-weight:800;text-shadow:0 0 12px #ff7b19}.sub{font-size:10px;color:var(--amber);letter-spacing:.18em;margin-top:6px}
+.status{border:1px solid var(--line);background:var(--panel);padding:10px 13px;min-width:155px;backdrop-filter:blur(8px);font-size:11px;line-height:1.8}
+.dot{display:inline-block;width:7px;height:7px;background:#e66d25;border-radius:50%;margin-right:8px;box-shadow:0 0 10px #ff8c2e}
+.panel{position:absolute;border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(8px);padding:13px 15px;box-shadow:0 0 18px rgba(255,119,25,.08),inset 0 0 15px rgba(255,119,25,.04)}
+.left{left:24px;top:34%;width:190px}.right{right:24px;top:36%;width:205px}.bottom{left:24px;right:24px;bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.label{font-size:9px;letter-spacing:.19em;color:#d17c39;margin-bottom:10px}.big{font-size:18px;color:#ffb15e}.small{font-size:10px;line-height:1.8;color:#c48c5a}.metric{display:flex;justify-content:space-between;gap:12px;margin:7px 0;font-size:10px}.metric span:last-child{color:#ffc17d}
+button{font:inherit;color:var(--amber2);background:rgba(255,137,42,.1);border:1px solid var(--line);padding:10px 13px;cursor:pointer;letter-spacing:.1em;font-size:10px}button:hover{background:rgba(255,137,42,.23)}button:disabled{opacity:.5;cursor:wait}
+.controls{display:flex;gap:8px;flex-wrap:wrap}.reticle{position:absolute;width:160px;height:160px;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid rgba(255,155,56,.35);border-radius:50%;box-shadow:0 0 20px #ff8a2020;pointer-events:none}
+.reticle:before,.reticle:after{content:"";position:absolute;background:var(--line)}.reticle:before{width:190px;height:1px;left:-16px;top:50%}.reticle:after{height:190px;width:1px;top:-16px;left:50%}
+.corner{position:absolute;width:32px;height:32px;border-color:var(--amber);border-style:solid;opacity:.8}.tl{top:90px;left:24px;border-width:2px 0 0 2px}.tr{top:90px;right:24px;border-width:2px 2px 0 0}.bl{bottom:110px;left:24px;border-width:0 0 2px 2px}.br{bottom:110px;right:24px;border-width:0 2px 2px 0}
+#toast{color:#ffd19a;font-size:11px;min-width:180px}.meter{height:3px;background:#442a17;margin-top:9px}.meter>div{height:100%;width:0;background:var(--amber);box-shadow:0 0 8px var(--amber);transition:width .15s}
+@media(max-width:700px){.left{top:auto;bottom:105px;left:12px;width:155px}.right{top:auto;bottom:105px;right:12px;width:155px}.topbar{left:12px;right:12px;top:12px}.bottom{left:12px;right:12px;bottom:10px}.status{min-width:120px}.panel{padding:9px}.small,.metric{font-size:9px}.reticle{width:110px;height:110px}.reticle:before{width:135px;left:-13px}.reticle:after{height:135px;top:-13px}}
+</style>
+</head>
+<body>
+<div id="app">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
+  <div class="scanlines"></div><div class="vignette"></div>
+  <div class="reticle"></div>
+  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+  <header class="topbar">
+    <div><div class="brand">JESA <span style="color:#fff0dc">/ VISION</span></div><div class="sub">REAL-TIME GESTURE INTERFACE · PROTOTYPE 01</div></div>
+    <div class="status"><div><i class="dot"></i><span id="cameraStatus">CAMERA: OFFLINE</span></div><div><i class="dot"></i><span id="trackStatus">TRACKING: IDLE</span></div><div>MODE: <span id="mode">STANDBY</span></div></div>
+  </header>
+  <section class="panel left"><div class="label">VISION TELEMETRY</div><div class="metric"><span>HANDS</span><span id="hands">0 DETECTED</span></div><div class="metric"><span>GESTURE</span><span id="gesture">NONE</span></div><div class="metric"><span>CONFIDENCE</span><span id="confidence">—</span></div><div class="meter"><div id="confidenceBar"></div></div><div class="small" style="margin-top:12px">LOCAL PROCESSING<br>CAMERA FRAMES STAY IN BROWSER</div></section>
+  <section class="panel right"><div class="label">GESTURE COMMANDS</div><div class="metric"><span>OPEN PALM</span><span>ACTIVATE</span></div><div class="metric"><span>FIST</span><span>STANDBY</span></div><div class="metric"><span>PINCH</span><span>SELECT</span></div><div class="metric"><span>INDEX UP</span><span>NAVIGATE</span></div><div class="small" style="margin-top:10px">Hold a gesture briefly to reduce accidental triggers.</div></section>
+  <footer class="panel bottom"><div><div class="label">SYSTEM EVENT</div><div id="toast">Awaiting camera initialization.</div></div><div class="controls"><button id="start">INITIALIZE CAMERA</button><button id="stop" disabled>STOP</button><button id="calibrate">RECENTER HUD</button></div></footer>
+</div>
+<script type="module">
+import { FilesetResolver, HandLandmarker, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const video=document.querySelector('#video'), canvas=document.querySelector('#overlay'), ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id);
+let stream=null, landmarker=null, running=false, lastVideoTime=-1, lastGesture='', gestureSince=0, lastAction='', drawingUtils=null;
+function event(msg){$('toast').textContent=msg}
+function resize(){const r=canvas.getBoundingClientRect();canvas.width=Math.round(r.width*devicePixelRatio);canvas.height=Math.round(r.height*devicePixelRatio);ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0)}
+new ResizeObserver(resize).observe(canvas); resize();
+function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function detectGesture(lm){
+  const tips=[8,12,16,20], pips=[6,10,14,18];
+  const extended=tips.map((t,i)=>lm[t].y<lm[pips[i]].y);
+  const thumbOpen=distance(lm[4],lm[9])>distance(lm[3],lm[9]);
+  const pinch=distance(lm[4],lm[8])<0.055;
+  if(pinch)return 'PINCH';
+  if(extended.every(Boolean)&&thumbOpen)return 'OPEN PALM';
+  if(!extended.some(Boolean)&&!thumbOpen)return 'FIST';
+  if(extended[0]&&!extended[1]&&!extended[2]&&!extended[3])return 'INDEX UP';
+  return 'TRACKING';
+}
+function handleGesture(g){
+  const now=performance.now();
+  if(g!==lastGesture){lastGesture=g;gestureSince=now;return}
+  if(now-gestureSince<650||g===lastAction)return;
+  if(['OPEN PALM','FIST','PINCH','INDEX UP'].includes(g)){
+    lastAction=g;
+    if(g==='OPEN PALM'){$('mode').textContent='ACTIVE';event('OPEN PALM CONFIRMED · INTERFACE ACTIVE')}
+    if(g==='FIST'){$('mode').textContent='STANDBY';event('FIST CONFIRMED · STANDBY MODE')}
+    if(g==='PINCH')event('PINCH CONFIRMED · SELECT ACTION READY')
+    if(g==='INDEX UP')event('INDEX UP CONFIRMED · NAVIGATION ACTION READY')
+  }
+}
+async function start(){
+  $('start').disabled=true;event('Requesting camera permission…');
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false});
+    video.srcObject=stream;await video.play();
+    event('Loading hand-tracking model…');
+    const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    landmarker=await HandLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'GPU'},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.55,minHandPresenceConfidence:.5,minTrackingConfidence:.5});
+    running=true;$('cameraStatus').textContent='CAMERA: ACTIVE';$('trackStatus').textContent='TRACKING: SEARCHING';$('stop').disabled=false;
+    event('Vision pipeline online. Show one hand to the camera.');requestAnimationFrame(loop);
+  }catch(e){
+    console.error(e);event('Initialization failed: '+(e.message||e.name)+'. Check camera permission and internet.');
+    $('start').disabled=false;
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+    $('cameraStatus').textContent='CAMERA: ERROR';
+  }
+}
+function loop(){
+  if(!running)return;
+  if(video.readyState>=2&&video.currentTime!==lastVideoTime){
+    lastVideoTime=video.currentTime;
+    const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);
+    try{
+      const result=landmarker.detectForVideo(video,performance.now());
+      const hands=result.landmarks||[];$('hands').textContent=hands.length+' DETECTED';
+      if(hands.length){
+        $('trackStatus').textContent='TRACKING: LOCKED';
+        drawingUtils=new DrawingUtils(ctx);
+        hands.forEach((lm,i)=>{
+          // Video is mirrored in CSS; mirror normalized x coordinates for overlay alignment.
+          const mirrored=lm.map(p=>({...p,x:1-p.x}));
+          drawingUtils.drawConnectors(mirrored,HandLandmarker.HAND_CONNECTIONS,{color:'#ff8d2d',lineWidth:2});
+          drawingUtils.drawLandmarks(mirrored,{color:'#ffd39d',fillColor:'#ff8d2d',lineWidth:1,radius:3});
+          const g=detectGesture(lm);
+          if(i===0){$('gesture').textContent=g;const conf=Math.round((result.handednesses?.[i]?.[0]?.score||.8)*100);$('confidence').textContent=conf+'%';$('confidenceBar').style.width=conf+'%';handleGesture(g)}
+        });
+      }else{
+        $('trackStatus').textContent='TRACKING: SEARCHING';$('gesture').textContent='NONE';$('confidence').textContent='—';$('confidenceBar').style.width='0%';lastGesture='';lastAction='';
+      }
+    }catch(e){console.error(e)}
+  }
+  requestAnimationFrame(loop);
+}
+function stop(){
+  running=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  if(landmarker){landmarker.close();landmarker=null}
+  video.srcObject=null;ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+  $('cameraStatus').textContent='CAMERA: OFFLINE';$('trackStatus').textContent='TRACKING: IDLE';$('hands').textContent='0 DETECTED';$('gesture').textContent='NONE';$('confidence').textContent='—';$('confidenceBar').style.width='0%';$('mode').textContent='STANDBY';$('start').disabled=false;$('stop').disabled=true;event('Camera stopped. No frames are being processed.');
+}
+$('start').addEventListener('click',start);$('stop').addEventListener('click',stop);
+$('calibrate').addEventListener('click',()=>{lastGesture='';lastAction='';gestureSince=0;$('mode').textContent='STANDBY';event('HUD recentered. Hold a gesture for 650 ms to confirm.')});
+window.addEventListener('beforeunload',()=>{if(stream)stream.getTracks().forEach(t=>t.stop())});
+</script>
+</body>
+</html>
